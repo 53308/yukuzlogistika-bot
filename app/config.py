@@ -5,31 +5,16 @@ Configuration settings for the Yukuz Logistics Bot
 import os
 from typing import List, Optional
 
-from pydantic import Field
-from pydantic_settings import BaseSettings
 
-
-class Config(BaseSettings):
+class Config:
     """Bot configuration"""
     
-    # Bot settings
-    BOT_TOKEN: str = Field(..., env="BOT_TOKEN")
-    ADMINS: List[int] = Field(default_factory=list, env="ADMINS")
-    CHANNEL_ID: Optional[int] = Field(None, env="CHANNEL_ID")
-    
-    # Database settings
-    DATABASE_URL: str = Field("sqlite+aiosqlite:///./app/data.db", env="DATABASE_URL")
-    
-    # Application settings
-    DEBUG: bool = Field(False, env="DEBUG")
-    
-    class Config:
-        env_file = ".env"
-        env_file_encoding = "utf-8"
-        case_sensitive = True
-    
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
+    def __init__(self):
+        # Load from environment variables
+        self.BOT_TOKEN = os.getenv("BOT_TOKEN", "")
+        self.CHANNEL_ID = int(os.getenv("CHANNEL_ID", "0")) if os.getenv("CHANNEL_ID") else None
+        self.DATABASE_URL = os.getenv("DATABASE_URL", "sqlite+aiosqlite:///./app/data.db")
+        self.DEBUG = os.getenv("DEBUG", "false").lower() == "true"
         
         # Parse ADMINS from comma-separated string
         admins_str = os.getenv("ADMINS", "")
@@ -38,6 +23,8 @@ class Config(BaseSettings):
                 self.ADMINS = [int(admin_id.strip()) for admin_id in admins_str.split(",") if admin_id.strip()]
             except ValueError:
                 self.ADMINS = []
+        else:
+            self.ADMINS = []
         
         # Convert PostgreSQL URL to async format
         if self.DATABASE_URL.startswith("postgresql://"):
