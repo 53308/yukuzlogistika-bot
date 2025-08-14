@@ -14,7 +14,7 @@ from aiogram.enums import ParseMode
 from aiogram.fsm.storage.memory import MemoryStorage
 from dotenv import load_dotenv
 
-from app.config import Config, get_config
+from app.config import get_config
 from app.db import init_db
 from app.middlewares import DatabaseMiddleware, LoggingMiddleware
 from app.routers import admin, cargo, search, start, transport, language
