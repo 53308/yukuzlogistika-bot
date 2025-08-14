@@ -18,6 +18,7 @@ from app.config import get_config
 from app.db import init_db
 from app.middlewares import DatabaseMiddleware, LoggingMiddleware
 from app.routers import admin, cargo, search, start, transport, language
+from app.routers import detail_view
 
 # Load environment variables
 load_dotenv()
@@ -66,6 +67,7 @@ async def create_dispatcher() -> Dispatcher:
     dp.include_router(cargo.router)
     dp.include_router(transport.router)
     dp.include_router(search.router)
+    dp.include_router(detail_view.router)
     dp.include_router(admin.router)
     
     return dp
