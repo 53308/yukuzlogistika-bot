@@ -2,18 +2,22 @@ from pydantic import BaseModel, Field
 import os
 
 class Settings(BaseModel):
-    bot_token: str = Field(validation_alias="BOT_TOKEN")
-    admins: list[int] = Field(default_factory=list, validation_alias="ADMINS")
-    channel_id: int | None = Field(default=None, validation_alias="CHANNEL_ID")
-    database_url: str = Field(default="sqlite+aiosqlite:///./app/data.db", validation_alias="DATABASE_URL")
+    bot_token: str
+    admins: list[int] = []
+    channel_id: int | None = None
+    database_url: str = "sqlite+aiosqlite:///./app/data.db"
 
     @classmethod
     def load(cls) -> "Settings":
-        admins_env = os.getenv("ADMINS", "")
-        admins = [int(x) for x in admins_env.split(",") if x.strip().isdigit()]
+        bot_token = os.getenv("BOT_TOKEN")
+        if not bot_token:
+            raise RuntimeError("BOT_TOKEN не задан в переменных окружения!")
+        admins = [int(x) for x in os.getenv("ADMINS", "").split(",") if x.strip().isdigit()]
+        channel_id = int(os.getenv("CHANNEL_ID")) if os.getenv("CHANNEL_ID") else None
+        database_url = os.getenv("DATABASE_URL", "sqlite+aiosqlite:///./app/data.db")
         return cls(
-            bot_token=os.getenv("BOT_TOKEN", ""),
+            bot_token=bot_token,
             admins=admins,
-            channel_id=int(os.getenv("CHANNEL_ID")) if os.getenv("CHANNEL_ID") else None,
-            database_url=os.getenv("DATABASE_URL", "sqlite+aiosqlite:///./app/data.db"),
+            channel_id=channel_id,
+            database_url=database_url
         )
