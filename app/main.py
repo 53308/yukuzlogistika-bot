@@ -15,7 +15,13 @@ async def main():
     if not settings.bot_token:
         raise RuntimeError("BOT_TOKEN is empty")
 
-    bot = Bot(token=settings.bot_token, parse_mode="HTML")
+    from aiogram.client.bot import DefaultBotProperties
+
+    bot = Bot(
+        token=settings.bot_token,
+        default=DefaultBotProperties(parse_mode="HTML")
+    )
+
     dp = Dispatcher(storage=MemoryStorage())
 
     # middlewares
