@@ -72,21 +72,7 @@ MULTILINGUAL_TEXTS = {
         "1month_sub": "1 ойлик обуна",
         "3month_sub": "3 ойлик обуна",
         "3day_sub": "3 кунлик обуна",
-        "listings_found": "та эълон топилди",
-        "today_listings": "таси бугунги",
-        "weight": "Оғирлиги",
-        "transport_type": "Транспорт тури",
-        "price": "Нарх",
-        "distance_time": "Масофа ва вақт",
-        "posted_time": "Эълон вақти",
-        "min_ago": "мин олдин",
-        "hour_ago": "соат олдин",
-        "error_occurred": "❌ Хатолик юз берди",
-        "cargo_description": "Юк тавсифи",
-        "route": "Маршрут",
-        "contact_info": "Алоқа маълумотлари",
-        "direct_message": "Тўғридан-тўғри хабар",
-        "subscription_prices": "Обуна нархлари:\n• 3 кун - 20,000 сўм\n• 1 ой - 60,000 сўм\n• 3 ой - 150,000 сўм"
+        "listings_found": "та эълон топилди"
     },
     
     # Russian
@@ -135,8 +121,8 @@ MULTILINGUAL_TEXTS = {
     }
 }
 
-def get_multilingual_text(key: str, language: str) -> str:
-    """Get text in the specified language"""
+def get_text(key: str, language: str = "uz") -> str:
+    """Get text in the specified language with fallback"""
     if language in MULTILINGUAL_TEXTS and key in MULTILINGUAL_TEXTS[language]:
         return MULTILINGUAL_TEXTS[language][key]
     
@@ -145,54 +131,3 @@ def get_multilingual_text(key: str, language: str) -> str:
         return MULTILINGUAL_TEXTS["uz"][key]
     
     return f"[{key}]"  # Return key if text not found
-
-# Uzbek texts (for backward compatibility)
-TEXTS_UZ = MULTILINGUAL_TEXTS["uz"]
-
-# Russian texts (for backward compatibility)  
-TEXTS_RU = MULTILINGUAL_TEXTS["ru"]
-
-def format_listing_text(listing, language: str, index: int) -> str:
-    """Format listing with proper language support"""
-    text = f"{index}. 🇺🇿 {listing.origin} - 🇺🇿 {listing.destination}\n\n"
-    
-    # Weight
-    if hasattr(listing, 'weight') and listing.weight:
-        weight_label = get_multilingual_text("weight", language)
-        text += f"⚖️ {weight_label}: {listing.weight}\n"
-    
-    # Transport type
-    transport_label = get_multilingual_text("transport_type", language)
-    transport_type = getattr(listing, 'cargo_type', 'Tent')
-    text += f"🚚 {transport_label}: {transport_type}\n"
-    
-    # Description (short)
-    if hasattr(listing, 'description') and listing.description:
-        desc_label = get_multilingual_text("cargo_description", language)
-        desc = listing.description[:30] + "..." if len(listing.description) > 30 else listing.description
-        text += f"📦 {desc_label}: {desc}\n"
-    
-    # Price
-    if hasattr(listing, 'price') and listing.price:
-        price_label = get_multilingual_text("price", language)
-        text += f"💵 {price_label}: {listing.price}\n"
-    
-    # Distance and time
-    distance_label = get_multilingual_text("distance_time", language)
-    text += f"🛣️ {distance_label}: 345 km 6.1 " + ("soatlik" if language == "uz" else "соатлик" if language == "uz_cyrillic" else "часа") + "\n"
-    
-    # Time posted
-    from datetime import datetime
-    time_diff = datetime.now() - listing.date_posted
-    time_label = get_multilingual_text("posted_time", language)
-    
-    if time_diff.seconds < 3600:
-        min_ago = get_multilingual_text("min_ago", language)
-        time_text = f"{time_diff.seconds // 60} {min_ago}"
-    else:
-        hour_ago = get_multilingual_text("hour_ago", language)
-        time_text = f"{time_diff.seconds // 3600} {hour_ago}"
-    
-    text += f"⏳ {time_text}"
-    
-    return text
