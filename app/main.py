@@ -111,52 +111,80 @@ async def on_startup(bot: Bot) -> None:
 
 async def on_shutdown(bot: Bot) -> None:
     """Bot shutdown handler"""
-    config = get_config()
-    
-    # Notify admins about bot shutdown
-    if config.ADMINS:
-        for admin_id in config.ADMINS:
-            try:
-                await bot.send_message(
-                    admin_id,
-                    "🤖 <b>Yukuz Logistics Bot остановлен!</b>\n\n"
-                    "⏹️ Бот завершил работу"
-                )
-            except Exception as e:
-                logger.warning(f"Failed to notify admin {admin_id}: {e}")
-    
-    logger.info("Bot shutdown completed")
+    logger.info("Bot shutting down...")
+    await bot.session.close()
 
 
 async def main() -> None:
-    """Main function to run the bot"""
+    """Main function"""
+    logger.info("🚛 Starting Yukuz Logistics Bot...")
+    
     try:
+        # Create bot and dispatcher
         bot = await create_bot()
         dp = await create_dispatcher()
         
-        # Register startup/shutdown handlers
+        # Register startup and shutdown handlers
         dp.startup.register(on_startup)
         dp.shutdown.register(on_shutdown)
         
-        logger.info("Starting Yukuz Logistics Bot...")
-        
         # Start polling
-        await dp.start_polling(
-            bot,
-            skip_updates=True,
-            allowed_updates=dp.resolve_used_update_types()
-        )
+        logger.info("Starting Telegram bot...")
+        await dp.start_polling(bot)
         
     except Exception as e:
         logger.error(f"Failed to start bot: {e}")
-        sys.exit(1)
+        raise
+
+
+def create_app() -> Any:
+    """Create HTTP app for health checks"""
+    try:
+        from aiohttp import web, ClientSession
+        from aiohttp.web import Request, Response
+        
+        async def health_check(request: Request) -> Response:
+            """Health check endpoint"""
+            return web.json_response({
+                "status": "healthy",
+                "service": "yukuz-logistics-bot",
+                "version": "1.0.0"
+            })
+        
+        app = web.Application()
+        app.router.add_get("/", health_check)
+        app.router.add_get("/health", health_check)
+        
+        return app
+    except ImportError:
+        logger.warning("aiohttp not available, HTTP server disabled")
+        return None
 
 
 if __name__ == "__main__":
+    # Run HTTP server in background for health checks
+    app = create_app()
+    if app:
+        import threading
+        from aiohttp import web
+        
+        def run_server():
+            try:
+                logger.info("HTTP server starting on http://0.0.0.0:5000")
+                logger.info("Visit the URL to see bot status and health information")
+                web.run_app(app, host="0.0.0.0", port=5000, access_log=None)
+            except Exception as e:
+                logger.warning(f"HTTP server failed to start: {e}")
+        
+        # Start HTTP server in background thread
+        server_thread = threading.Thread(target=run_server, daemon=True)
+        server_thread.start()
+    
+    # Start main bot
     try:
         asyncio.run(main())
     except KeyboardInterrupt:
         logger.info("Bot stopped by user")
     except Exception as e:
-        logger.error(f"Critical error: {e}")
+        logger.error(f"Bot crashed: {e}")
         sys.exit(1)
