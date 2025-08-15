@@ -9,8 +9,9 @@ VEHICLES = ["Фура", "КамАЗ", "Isuzu", "Газель", "Тент", "Ре
 
 MAIN_MENU = ReplyKeyboardMarkup(
     keyboard=[
-        [KeyboardButton(text="➕ Новое объявление"), KeyboardButton(text="🔎 Поиск")],
-        [KeyboardButton(text="ℹ️ Помощь")],
+        [KeyboardButton(text="🗣 Тезkor Qidiruv"), KeyboardButton(text="📋 Mening e'lonlarim")],
+        [KeyboardButton(text="➕ E'lon qo'shish"), KeyboardButton(text="⚙️ Sozlamalar")],
+        [KeyboardButton(text="❓ Помощь")],
     ], resize_keyboard=True
 )
 
