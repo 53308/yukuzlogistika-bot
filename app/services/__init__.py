@@ -1,7 +1,7 @@
 """
-Routers package for the Yukuz Logistics Bot
+Services package for the Yukuz Logistics Bot
 """
 
-from . import admin, cargo, search, start, transport, language
+from . import data_service, init
 
-__all__ = ["admin", "cargo", "search", "start", "transport", "language"]
+__all__ = ["data_service", "init"]
