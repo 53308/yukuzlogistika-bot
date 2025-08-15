@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 Unified run.py for Render deployment
-- Runs Telegram bot
+- Runs Telegram bot  
 - Runs health-check server for Render
 - Prevents multiple instances via lock file
 """
@@ -25,7 +25,7 @@ from aiogram.fsm.storage.memory import MemoryStorage
 from app.config import get_config
 from app.db import init_db
 from app.middlewares import DatabaseMiddleware, LoggingMiddleware
-from app.routers import admin, cargo, search, start, transport, language
+from app.routers import start
 
 # ======== LOCK FILE PROTECTION ========
 LOCK_FILE = "/tmp/yukuz_bot.lock"
@@ -90,11 +90,6 @@ async def create_dispatcher() -> Dispatcher:
 
     # Include routers
     dp.include_router(start.router)
-    dp.include_router(language.router)
-    dp.include_router(cargo.router)
-    dp.include_router(transport.router)
-    dp.include_router(search.router)
-    dp.include_router(admin.router)
 
     return dp
 
@@ -110,29 +105,11 @@ async def on_startup(bot: Bot) -> None:
     from aiogram.types import BotCommand
     commands = [
         BotCommand(command="start", description="🏠 Бошлаш / Начать"),
-        BotCommand(command="cargo", description="📦 Юк эълон қилиш / Объявить груз"),
-        BotCommand(command="transport", description="🚛 Транспорт эълон қилиш / Объявить транспорт"),
-        BotCommand(command="search", description="🔍 Қидириш / Поиск"),
         BotCommand(command="help", description="❓ Ёрдам / Помощь"),
     ]
     await bot.set_my_commands(commands)
 
     logger.info("Bot commands set")
-
-    # Notify admins about bot startup
-    if config.ADMINS:
-        for admin_id in config.ADMINS:
-            try:
-                await bot.send_message(
-                    admin_id,
-                    "🤖 <b>Yukuz Logistics Bot запущен!</b>\n\n"
-                    "✅ База данных инициализирована\n"
-                    "✅ Команды установлены\n"
-                    "✅ Бот готов к работе"
-                )
-            except Exception as e:
-                logger.warning(f"Failed to notify admin {admin_id}: {e}")
-
     logger.info("Bot started successfully")
 
 async def on_shutdown(bot: Bot) -> None:
