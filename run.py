@@ -2,9 +2,8 @@
 # -*- coding: utf-8 -*-
 """
 Unified run.py for Render deployment
-- Runs Telegram bot
-- Runs health-check server for Render
-- Prevents multiple instances via lock file
+- Telegram bot + health-check server
+- Lock file protection
 """
 
 import asyncio
@@ -15,7 +14,7 @@ import atexit
 from aiohttp import web
 from aiohttp.web import Application, Request, Response
 
-# ======== LOCK FILE PROTECTION ========
+# ======== LOCK FILE ========
 LOCK_FILE = "/tmp/yukuz_bot.lock"
 if os.path.exists(LOCK_FILE):
     print("⚠️ Bot is already running. Exiting...")
@@ -41,7 +40,7 @@ logger = logging.getLogger(__name__)
 async def health_check(_: Request) -> Response:
     return web.Response(text="Bot is running", status=200)
 
-async def create_health_server():
+async def start_health_server():
     app = Application()
     app.router.add_get("/healthz", health_check)
     app.router.add_get("/", health_check)
@@ -51,25 +50,56 @@ async def create_health_server():
     site = web.TCPSite(runner, "0.0.0.0", port)
     await site.start()
     logger.info(f"✅ Health-check server running on port {port}")
-    return runner
 
-# ======== BOT MAIN ========
+# ======== TELEGRAM BOT MAIN ========
+# Вставляем сюда содержимое бывшего app/main.py:
+import sys
+import logging
+from aiogram import Bot, Dispatcher
+from aiogram.client.default import DefaultBotProperties
+from aiogram.enums import ParseMode
+from aiogram.fsm.storage.memory import MemoryStorage
+from dotenv import load_dotenv
+
+load_dotenv()
+
+# ... остальной код из main.py (создание бота, диспетчера, команд, middlewares, on_startup, on_shutdown)
+
 async def bot_main():
-    try:
-        from app.main import main  # твой полный bot main
-        await main()
-    except Exception as e:
-        logger.error(f"Bot error: {e}")
-        raise
+    from app.config import get_config
+    from app.db import init_db
+    from app.middlewares import DatabaseMiddleware, LoggingMiddleware
+    from app.routers import admin, cargo, search, start, transport, language
+
+    config = get_config()
+    if not config.BOT_TOKEN:
+        raise ValueError("BOT_TOKEN is required")
+
+    bot = Bot(token=config.BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
+    dp = Dispatcher(storage=MemoryStorage())
+    
+    dp.message.middleware(LoggingMiddleware())
+    dp.callback_query.middleware(LoggingMiddleware())
+    dp.message.middleware(DatabaseMiddleware())
+    dp.callback_query.middleware(DatabaseMiddleware())
+    
+    dp.include_router(start.router)
+    dp.include_router(language.router)
+    dp.include_router(cargo.router)
+    dp.include_router(transport.router)
+    dp.include_router(search.router)
+    dp.include_router(admin.router)
+
+    dp.startup.register(lambda _: init_db())
+    dp.startup.register(lambda _: logger.info("Bot startup done"))
+    dp.shutdown.register(lambda _: bot.session.close())
+
+    logger.info("🚛 Starting Telegram bot...")
+    await dp.start_polling(bot)
 
 # ======== MAIN ========
 async def main():
-    logger.info("🚛 Starting Yukuz Logistics Bot on Render...")
-
-    # Запускаем health-check сервер
-    await create_health_server()
-
-    # Запускаем бот параллельно
+    await start_health_server()
     await bot_main()
 
 if __name__ == "__main__":
