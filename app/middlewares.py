@@ -18,14 +18,15 @@ class ThrottleMiddleware(BaseMiddleware):
         self.bucket: dict[int, float] = {}
 
     async def __call__(self,
-                       handler: Callable[[Message, Dict[str, Any]], Awaitable[Any]],
-                       event: Message,
+                       handler: Callable[[TelegramObject, Dict[str, Any]], Awaitable[Any]],
+                       event: TelegramObject,
                        data: Dict[str, Any]):
-        now = time.time()
-        last = self.bucket.get(event.from_user.id, 0)
-        if now - last < self.rate:
-            return
-        self.bucket[event.from_user.id] = now
+        if isinstance(event, (Message, CallbackQuery)) and event.from_user:
+            now = time.time()
+            last = self.bucket.get(event.from_user.id, 0)
+            if now - last < self.rate:
+                return
+            self.bucket[event.from_user.id] = now
         return await handler(event, data)
 
 class LoggingMiddleware(BaseMiddleware):
@@ -37,12 +38,12 @@ class LoggingMiddleware(BaseMiddleware):
         event: TelegramObject,
         data: Dict[str, Any]
     ) -> Any:
-        if isinstance(event, (Message, CallbackQuery)):
+        if isinstance(event, (Message, CallbackQuery)) and event.from_user:
             user = event.from_user
             if isinstance(event, Message):
-                logger.info(f"Message from {user.id} (@{user.username}): {event.text}")
+                logger.info(f"Message from {user.id} (@{user.username or 'None'}): {event.text}")
             elif isinstance(event, CallbackQuery):
-                logger.info(f"Callback from {user.id} (@{user.username}): {event.data}")
+                logger.info(f"Callback from {user.id} (@{user.username or 'None'}): {event.data}")
         
         return await handler(event, data)
 
@@ -55,10 +56,9 @@ class DatabaseMiddleware(BaseMiddleware):
         event: TelegramObject,
         data: Dict[str, Any]
     ) -> Any:
-        if isinstance(event, (Message, CallbackQuery)):
-            async with get_session() as session:
-                session: AsyncSession
-                
+        if isinstance(event, (Message, CallbackQuery)) and event.from_user:
+            session = await get_session()
+            try:
                 # Get or create user
                 user = await self._get_or_create_user(session, event.from_user)
                 
@@ -67,14 +67,13 @@ class DatabaseMiddleware(BaseMiddleware):
                 data["user"] = user
                 data["language"] = user.language if user else "uz"
                 
-                try:
-                    return await handler(event, data)
-                except Exception as e:
-                    await session.rollback()
-                    logger.error(f"Database error in middleware: {e}")
-                    raise
-                finally:
-                    await session.close()
+                return await handler(event, data)
+            except Exception as e:
+                await session.rollback()
+                logger.error(f"Database error in middleware: {e}")
+                raise
+            finally:
+                await session.close()
         
         return await handler(event, data)
     
