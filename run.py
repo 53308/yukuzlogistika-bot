@@ -1,18 +1,12 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
-Unified run.py for Render deployment
-- Runs Telegram bot  
-- Runs health-check server for Render
-- Prevents multiple instances via lock file
+Production run.py for Render deployment with HTTP health check
 """
 
 import asyncio
 import logging
 import sys
 import os
-import atexit
-import threading
 from aiohttp import web
 from aiohttp.web import Application, Request, Response
 from dotenv import load_dotenv
@@ -27,134 +21,90 @@ from app.db import init_db
 from app.middlewares import DatabaseMiddleware, LoggingMiddleware
 from app.routers import start
 
-# ======== LOCK FILE PROTECTION ========
-LOCK_FILE = "/tmp/yukuz_bot.lock"
-if os.path.exists(LOCK_FILE):
-    print("⚠️ Bot is already running. Exiting...")
-    sys.exit(0)
-
-with open(LOCK_FILE, "w") as f:
-    f.write(str(os.getpid()))
-
-@atexit.register
-def cleanup():
-    if os.path.exists(LOCK_FILE):
-        os.remove(LOCK_FILE)
-
-# ======== LOGGING ========
+# Configure logging
 logging.basicConfig(
     level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    handlers=[
-        logging.StreamHandler(sys.stdout),
-        logging.FileHandler("bot.log", encoding="utf-8")
-    ]
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[logging.StreamHandler(sys.stdout)]
 )
 logger = logging.getLogger(__name__)
 
-# ======== HEALTH CHECK ========
+# Health check endpoint
 async def health_check(_: Request) -> Response:
     return web.Response(text="Bot is running", status=200)
 
-async def create_health_server():
-    app = Application()
-    app.router.add_get("/healthz", health_check)
-    app.router.add_get("/", health_check)
-    port = int(os.environ.get("PORT", 8080))
-    return web.AppRunner(app), port
-
-# ======== BOT LOGIC ========
 async def create_bot() -> Bot:
-    """Create and configure bot instance"""
+    """Create bot instance"""
     config = get_config()
-
     if not config.BOT_TOKEN:
-        raise ValueError("BOT_TOKEN is required. Please set it in .env file")
-
-    bot = Bot(
+        raise ValueError("BOT_TOKEN is required")
+    
+    return Bot(
         token=config.BOT_TOKEN,
         default=DefaultBotProperties(parse_mode=ParseMode.HTML)
     )
 
-    return bot
-
 async def create_dispatcher() -> Dispatcher:
-    """Create and configure dispatcher with routers and middlewares"""
+    """Create dispatcher with middlewares and routers"""
     dp = Dispatcher(storage=MemoryStorage())
-
+    
     # Add middlewares
     dp.message.middleware(LoggingMiddleware())
     dp.callback_query.middleware(LoggingMiddleware())
     dp.message.middleware(DatabaseMiddleware())
     dp.callback_query.middleware(DatabaseMiddleware())
-
+    
     # Include routers
     dp.include_router(start.router)
-
+    
     return dp
 
-async def on_startup(bot: Bot) -> None:
-    """Bot startup handler"""
-    config = get_config()
-
-    # Initialize database
+async def setup_bot(bot: Bot) -> None:
+    """Initialize database and set commands"""
     await init_db()
     logger.info("Database initialized")
-
+    
     # Set bot commands
     from aiogram.types import BotCommand
     commands = [
-        BotCommand(command="start", description="🏠 Бошлаш / Начать"),
-        BotCommand(command="help", description="❓ Ёрдам / Помощь"),
+        BotCommand(command="start", description="🏠 Начать / Boshlaш"),
+        BotCommand(command="help", description="❓ Помощь / Yordam"),
     ]
     await bot.set_my_commands(commands)
-
     logger.info("Bot commands set")
-    logger.info("Bot started successfully")
 
-async def on_shutdown(bot: Bot) -> None:
-    """Bot shutdown handler"""
-    logger.info("Bot shutting down...")
-    await bot.session.close()
-
-async def bot_main():
-    """Start the bot polling"""
-    load_dotenv()
-    bot = await create_bot()
-    dp = await create_dispatcher()
-    dp.startup.register(on_startup)
-    dp.shutdown.register(on_shutdown)
-    await dp.start_polling(bot)
-
-# ======== BOT RUNNER ========
-def run_bot_in_thread():
-    def run_bot():
-        try:
-            asyncio.run(bot_main())
-        except Exception as e:
-            logger.error(f"Bot thread error: {e}")
-
-    bot_thread = threading.Thread(target=run_bot, daemon=True)
-    bot_thread.start()
-    logger.info("Bot started in background thread")
-
-# ======== MAIN ========
 async def main():
-    logger.info("🚛 Starting Yukuz Logistics Bot on Render...")
-
+    """Main function"""
+    load_dotenv()
+    logger.info("🚛 Starting Yukuz Logistics Bot...")
+    
     try:
-        run_bot_in_thread()
-        await asyncio.sleep(2)  # Give bot time to start
-
-        runner, port = await create_health_server()
+        # Create bot and dispatcher
+        bot = await create_bot()
+        dp = await create_dispatcher()
+        
+        # Setup bot
+        await setup_bot(bot)
+        
+        # Create HTTP server for health checks
+        app = Application()
+        app.router.add_get('/', health_check)
+        app.router.add_get('/healthz', health_check)
+        
+        # Get port from environment
+        port = int(os.environ.get('PORT', 8080))
+        
+        # Start HTTP server
+        runner = web.AppRunner(app)
         await runner.setup()
-        site = web.TCPSite(runner, "0.0.0.0", port)
+        site = web.TCPSite(runner, '0.0.0.0', port)
         await site.start()
-        logger.info(f"✅ Health-check server running on port {port}")
-
-        while True:
-            await asyncio.sleep(1)
-
+        logger.info(f"✅ HTTP server started on port {port}")
+        
+        # Start bot polling (this will run indefinitely)
+        logger.info("🤖 Starting bot polling...")
+        await dp.start_polling(bot)
+        
     except Exception as e:
         logger.error(f"Critical error: {e}")
         sys.exit(1)
@@ -163,7 +113,7 @@ if __name__ == "__main__":
     try:
         asyncio.run(main())
     except KeyboardInterrupt:
-        logger.info("Stopped by user")
+        logger.info("Bot stopped by user")
     except Exception as e:
         logger.error(f"Startup error: {e}")
         sys.exit(1)
