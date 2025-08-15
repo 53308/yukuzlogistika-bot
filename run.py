@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 Unified run.py for Render deployment
-- Runs Telegram bot (from app/main.py)
+- Runs Telegram bot
 - Runs health-check server for Render
 - Prevents multiple instances via lock file
 """
@@ -15,6 +15,17 @@ import atexit
 import threading
 from aiohttp import web
 from aiohttp.web import Application, Request, Response
+from dotenv import load_dotenv
+
+from aiogram import Bot, Dispatcher
+from aiogram.client.default import DefaultBotProperties
+from aiogram.enums import ParseMode
+from aiogram.fsm.storage.memory import MemoryStorage
+
+from app.config import get_config
+from app.db import init_db
+from app.middlewares import DatabaseMiddleware, LoggingMiddleware
+from app.routers import admin, cargo, search, start, transport, language
 
 # ======== LOCK FILE PROTECTION ========
 LOCK_FILE = "/tmp/yukuz_bot.lock"
@@ -34,7 +45,10 @@ def cleanup():
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    handlers=[logging.StreamHandler(sys.stdout)]
+    handlers=[
+        logging.StreamHandler(sys.stdout),
+        logging.FileHandler("bot.log", encoding="utf-8")
+    ]
 )
 logger = logging.getLogger(__name__)
 
@@ -49,15 +63,94 @@ async def create_health_server():
     port = int(os.environ.get("PORT", 8080))
     return web.AppRunner(app), port
 
+# ======== BOT LOGIC ========
+async def create_bot() -> Bot:
+    """Create and configure bot instance"""
+    config = get_config()
+
+    if not config.BOT_TOKEN:
+        raise ValueError("BOT_TOKEN is required. Please set it in .env file")
+
+    bot = Bot(
+        token=config.BOT_TOKEN,
+        default=DefaultBotProperties(parse_mode=ParseMode.HTML)
+    )
+
+    return bot
+
+async def create_dispatcher() -> Dispatcher:
+    """Create and configure dispatcher with routers and middlewares"""
+    dp = Dispatcher(storage=MemoryStorage())
+
+    # Add middlewares
+    dp.message.middleware(LoggingMiddleware())
+    dp.callback_query.middleware(LoggingMiddleware())
+    dp.message.middleware(DatabaseMiddleware())
+    dp.callback_query.middleware(DatabaseMiddleware())
+
+    # Include routers
+    dp.include_router(start.router)
+    dp.include_router(language.router)
+    dp.include_router(cargo.router)
+    dp.include_router(transport.router)
+    dp.include_router(search.router)
+    dp.include_router(admin.router)
+
+    return dp
+
+async def on_startup(bot: Bot) -> None:
+    """Bot startup handler"""
+    config = get_config()
+
+    # Initialize database
+    await init_db()
+    logger.info("Database initialized")
+
+    # Set bot commands
+    from aiogram.types import BotCommand
+    commands = [
+        BotCommand(command="start", description="🏠 Бошлаш / Начать"),
+        BotCommand(command="cargo", description="📦 Юк эълон қилиш / Объявить груз"),
+        BotCommand(command="transport", description="🚛 Транспорт эълон қилиш / Объявить транспорт"),
+        BotCommand(command="search", description="🔍 Қидириш / Поиск"),
+        BotCommand(command="help", description="❓ Ёрдам / Помощь"),
+    ]
+    await bot.set_my_commands(commands)
+
+    logger.info("Bot commands set")
+
+    # Notify admins about bot startup
+    if config.ADMINS:
+        for admin_id in config.ADMINS:
+            try:
+                await bot.send_message(
+                    admin_id,
+                    "🤖 <b>Yukuz Logistics Bot запущен!</b>\n\n"
+                    "✅ База данных инициализирована\n"
+                    "✅ Команды установлены\n"
+                    "✅ Бот готов к работе"
+                )
+            except Exception as e:
+                logger.warning(f"Failed to notify admin {admin_id}: {e}")
+
+    logger.info("Bot started successfully")
+
+async def on_shutdown(bot: Bot) -> None:
+    """Bot shutdown handler"""
+    logger.info("Bot shutting down...")
+    await bot.session.close()
+
+async def bot_main():
+    """Start the bot polling"""
+    load_dotenv()
+    bot = await create_bot()
+    dp = await create_dispatcher()
+    dp.startup.register(on_startup)
+    dp.shutdown.register(on_shutdown)
+    await dp.start_polling(bot)
+
 # ======== BOT RUNNER ========
 def run_bot_in_thread():
-    async def bot_main():
-        try:
-            from app.main import main  # FULL bot version
-            await main()
-        except Exception as e:
-            logger.error(f"Bot error: {e}")
-
     def run_bot():
         try:
             asyncio.run(bot_main())
@@ -73,20 +166,15 @@ async def main():
     logger.info("🚛 Starting Yukuz Logistics Bot on Render...")
 
     try:
-        # Start bot in background thread
         run_bot_in_thread()
+        await asyncio.sleep(2)  # Give bot time to start
 
-        # Give bot time to start
-        await asyncio.sleep(2)
-
-        # Start health-check server
         runner, port = await create_health_server()
         await runner.setup()
         site = web.TCPSite(runner, "0.0.0.0", port)
         await site.start()
         logger.info(f"✅ Health-check server running on port {port}")
 
-        # Keep running
         while True:
             await asyncio.sleep(1)
 
