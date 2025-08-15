@@ -12,9 +12,7 @@ import logging
 import sys
 import os
 import atexit
-import threading
 from aiohttp import web
-from aiohttp.web import Application, Request, Response
 from dotenv import load_dotenv
 
 from aiogram import Bot, Dispatcher
@@ -53,42 +51,38 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # ======== HEALTH CHECK ========
-async def health_check(_: Request) -> Response:
+async def health_check(_: web.Request) -> web.Response:
     return web.Response(text="Bot is running", status=200)
 
 async def create_health_server():
-    app = Application()
+    app = web.Application()
     app.router.add_get("/healthz", health_check)
     app.router.add_get("/", health_check)
     port = int(os.environ.get("PORT", 8080))
-    return web.AppRunner(app), port
+    runner = web.AppRunner(app)
+    await runner.setup()
+    site = web.TCPSite(runner, "0.0.0.0", port)
+    await site.start()
+    logger.info(f"✅ Health-check server running on port {port}")
 
 # ======== BOT LOGIC ========
 async def create_bot() -> Bot:
-    """Create and configure bot instance"""
     config = get_config()
-
     if not config.BOT_TOKEN:
         raise ValueError("BOT_TOKEN is required. Please set it in .env file")
 
-    bot = Bot(
+    return Bot(
         token=config.BOT_TOKEN,
         default=DefaultBotProperties(parse_mode=ParseMode.HTML)
     )
 
-    return bot
-
 async def create_dispatcher() -> Dispatcher:
-    """Create and configure dispatcher with routers and middlewares"""
     dp = Dispatcher(storage=MemoryStorage())
-
-    # Add middlewares
     dp.message.middleware(LoggingMiddleware())
     dp.callback_query.middleware(LoggingMiddleware())
     dp.message.middleware(DatabaseMiddleware())
     dp.callback_query.middleware(DatabaseMiddleware())
 
-    # Include routers
     dp.include_router(start.router)
     dp.include_router(language.router)
     dp.include_router(cargo.router)
@@ -98,15 +92,11 @@ async def create_dispatcher() -> Dispatcher:
 
     return dp
 
-async def on_startup(bot: Bot) -> None:
-    """Bot startup handler"""
+async def on_startup(bot: Bot):
     config = get_config()
-
-    # Initialize database
     await init_db()
     logger.info("Database initialized")
 
-    # Set bot commands
     from aiogram.types import BotCommand
     commands = [
         BotCommand(command="start", description="🏠 Бошлаш / Начать"),
@@ -116,10 +106,8 @@ async def on_startup(bot: Bot) -> None:
         BotCommand(command="help", description="❓ Ёрдам / Помощь"),
     ]
     await bot.set_my_commands(commands)
-
     logger.info("Bot commands set")
 
-    # Notify admins about bot startup
     if config.ADMINS:
         for admin_id in config.ADMINS:
             try:
@@ -133,54 +121,25 @@ async def on_startup(bot: Bot) -> None:
             except Exception as e:
                 logger.warning(f"Failed to notify admin {admin_id}: {e}")
 
-    logger.info("Bot started successfully")
-
-async def on_shutdown(bot: Bot) -> None:
-    """Bot shutdown handler"""
+async def on_shutdown(bot: Bot):
     logger.info("Bot shutting down...")
     await bot.session.close()
 
-async def bot_main():
-    """Start the bot polling"""
+async def main():
     load_dotenv()
     bot = await create_bot()
     dp = await create_dispatcher()
     dp.startup.register(on_startup)
     dp.shutdown.register(on_shutdown)
-    await dp.start_polling(bot)
 
-# ======== BOT RUNNER ========
-def run_bot_in_thread():
-    def run_bot():
-        try:
-            asyncio.run(bot_main())
-        except Exception as e:
-            logger.error(f"Bot thread error: {e}")
+    # Запуск health-check сервера
+    await create_health_server()
 
-    bot_thread = threading.Thread(target=run_bot, daemon=True)
-    bot_thread.start()
-    logger.info("Bot started in background thread")
-
-# ======== MAIN ========
-async def main():
-    logger.info("🚛 Starting Yukuz Logistics Bot on Render...")
-
+    # Запуск бота в том же asyncio loop
     try:
-        run_bot_in_thread()
-        await asyncio.sleep(2)  # Give bot time to start
-
-        runner, port = await create_health_server()
-        await runner.setup()
-        site = web.TCPSite(runner, "0.0.0.0", port)
-        await site.start()
-        logger.info(f"✅ Health-check server running on port {port}")
-
-        while True:
-            await asyncio.sleep(1)
-
-    except Exception as e:
-        logger.error(f"Critical error: {e}")
-        sys.exit(1)
+        await dp.start_polling(bot)
+    finally:
+        await on_shutdown(bot)
 
 if __name__ == "__main__":
     try:
