@@ -50,7 +50,8 @@ MULTILINGUAL_TEXTS = {
         "contact_access_free": "🆓 Bepul kontakt murojaati ishlatildi ({}/5)",
         "my_listings": "📋 Mening e'lonlarim\n\nSizning aktiv e'lonlaringiz ro'yxati:",
         "add_listing": "➕ E'lon qo'shish\n\nYangi e'lon yaratish uchun tur tanlang:",
-        "settings_menu": "⚙️ Sozlamalar\n\nTil va obuna sozlamalarini o'zgartiring:"
+        "settings_menu": "⚙️ Sozlamalar\n\nTil va obuna sozlamalarini o'zgartiring:",
+        "main_menu": "📋 Asosiy menyu"
     },
     
     # Uzbek Cyrillic
@@ -80,7 +81,8 @@ MULTILINGUAL_TEXTS = {
         "listings_found": "та эълон топилди",
         "my_listings": "📋 Менинг эълонларим\n\nСизнинг фаол эълонларингиз рўйхати:",
         "add_listing": "➕ Эълон қўшиш\n\nЯнги эълон яратиш учун тур танланг:",
-        "settings_menu": "⚙️ Созламалар\n\nТил ва обуна созламаларини ўзгартиринг:"
+        "settings_menu": "⚙️ Созламалар\n\nТил ва обуна созламаларини ўзгартиринг:",
+        "main_menu": "📋 Асосий меню"
     },
     
     # Russian
@@ -129,7 +131,8 @@ MULTILINGUAL_TEXTS = {
         "contact_access_free": "🆓 Использовано бесплатное обращение к контакту ({}/5)",
         "my_listings": "📋 Мои объявления\n\nСписок ваших активных объявлений:",
         "add_listing": "➕ Добавить объявление\n\nВыберите тип для создания нового объявления:",
-        "settings_menu": "⚙️ Настройки\n\nИзмените настройки языка и подписки:"
+        "settings_menu": "⚙️ Настройки\n\nИзмените настройки языка и подписки:",
+        "main_menu": "📋 Главное меню"
     }
 }
 
