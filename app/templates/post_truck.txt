@@ -1,7 +1,0 @@
-{from_} → {to}
-🚛 Машина: {vehicle}
-⚖️ Свободно: {capacity}
-📦 Ищу груз: {cargo}
-💰 Цена: {price}
-☎️ {phone}
-{hashtags}

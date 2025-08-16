@@ -1,7 +1,0 @@
-{from_} → {to}
-📦 Груз: {cargo}
-🚛 Машина: {vehicle}
-⚖️ Тоннаж/объём: {capacity}
-💰 Цена: {price}
-☎️ {phone}
-{hashtags}
