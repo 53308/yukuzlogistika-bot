@@ -375,7 +375,8 @@ async def perform_search_by_city(callback_query: CallbackQuery, city_name: str, 
         # Connect to PostgreSQL database
         DATABASE_URL = os.getenv('DATABASE_URL')
         if not DATABASE_URL:
-            await callback_query.message.answer("❌ Ошибка подключения к базе данных")
+            if callback_query.message:
+                await callback_query.message.answer("❌ Ошибка подключения к базе данных")
             return
             
         conn = psycopg2.connect(DATABASE_URL)
@@ -408,19 +409,22 @@ async def perform_search_by_city(callback_query: CallbackQuery, city_name: str, 
         conn.close()
         
         if not results:
-            await callback_query.message.edit_text(f"❌ По запросу '{city_name}' ничего не найдено.")
+            if callback_query.message:
+                await callback_query.message.edit_text(f"❌ По запросу '{city_name}' ничего не найдено.")
             return
         
         # Send results as individual messages exactly like original
         search_icon = "📦" if search_type == "cargo" else "🚚"
-        await callback_query.message.edit_text(f"🔍 Результаты поиска {search_icon} в {city_name}:")
+        if callback_query.message:
+            await callback_query.message.edit_text(f"🔍 Результаты поиска {search_icon} в {city_name}:")
         
         for i, row in enumerate(results[:5], 1):
-            # Unpack all columns from database
+            # Unpack columns based on actual database structure
             (announcement_id, title, description, ann_type, status, from_loc, to_loc, 
-             cargo_type, vehicle_type, weight_capacity, contact_name, contact_phone, 
-             telegram_username, price_per_ton, departure_date, estimated_delivery, 
-             special_requirements, source, user_id, created_at, updated_at) = row
+             cargo_weight, cargo_type, vehicle_type, contact_name, contact_phone, 
+             contact_address, notes, user_telegram_id, user_name, location_lat, location_lon,
+             created_at, updated_at, expires_at, views_count, contacts_accessed, 
+             message_url, source, telegram_username) = row
             
             # Get country flag for location
             flag = get_country_flag(from_loc)
@@ -441,14 +445,15 @@ async def perform_search_by_city(callback_query: CallbackQuery, city_name: str, 
                 [InlineKeyboardButton(text="Подробнее", callback_data=f"detail_{announcement_id}")]
             ])
             
-            await callback_query.message.answer(
-                message_text, 
-                parse_mode="HTML",
-                reply_markup=detail_keyboard
-            )
+            if callback_query.message:
+                await callback_query.message.answer(
+                    message_text, 
+                    parse_mode="HTML",
+                    reply_markup=detail_keyboard
+                )
         
         # Show "6 из 15 показать больше" button if more results exist
-        if len(results) == 6:
+        if len(results) == 6 and callback_query.message:
             more_keyboard = InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text="6 из 15 показать больше", callback_data=f"show_more_{city_name}_{search_type}")]
             ])
@@ -456,7 +461,8 @@ async def perform_search_by_city(callback_query: CallbackQuery, city_name: str, 
         
     except Exception as e:
         logger.error(f"Search error: {e}")
-        await callback_query.message.answer(f"❌ Ошибка поиска: {str(e)}")
+        if callback_query.message:
+            await callback_query.message.answer(f"❌ Ошибка поиска: {str(e)}")
 
 
     await state.set_state(SearchState.waiting_city_input)
@@ -561,7 +567,8 @@ async def settings_submenu_callback(callback: CallbackQuery):
             "statistics": "📊 <b>Статистика</b>\n\n📦 Объявлений: 5005\n🆕 Новых сегодня: 1604\n👥 Пользователей: 2341",
             "contacts": "📞 <b>Контакты</b>\n\n👨‍💼 Админ: @admin_yuk_uz\n🌐 yukuz.uz\n📧 info@yukuz.uz"
         }
-        await callback.message.edit_text(texts[callback.data])
+        if callback.data in texts:
+            await callback.message.edit_text(texts[callback.data])
     await callback.answer()
 
 @router.callback_query(F.data.in_(["how_to_use", "about_subscription", "contact_us", "rules"]))
@@ -574,7 +581,8 @@ async def help_submenu_callback(callback: CallbackQuery):
             "contact_us": "📞 <b>Связаться с нами</b>\n\n👨‍💼 Админ: @admin_yuk_uz\n📱 Канал: @yuk_uz_news\n🌐 Сайт: yukuz.uz",
             "rules": "📋 <b>Правила</b>\n\n• Указывайте реальные данные\n• Не спамьте объявлениями\n• Будьте вежливы\n• Соблюдайте законы УЗ"
         }
-        await callback.message.edit_text(texts[callback.data])
+        if callback.data in texts:
+            await callback.message.edit_text(texts[callback.data])
     await callback.answer()
 
 @router.message(F.text == "📦 Мои объявления")
@@ -643,7 +651,7 @@ async def vehicle_selection(message: Message, state: FSMContext):
         "Другие": "other"
     }
     
-    vehicle_type = vehicle_mapping.get(message.text, "all")
+    vehicle_type = vehicle_mapping.get(message.text or "", "all")
     await state.update_data(vehicle_filter=vehicle_type)
     
     await message.answer(f"🔄 <b>Тип транспорта выбран: {message.text}</b>")
@@ -799,12 +807,14 @@ async def handle_city_search(message: Message, state: FSMContext):
             count_query += " AND " + " AND ".join(conditions)
         
         cursor.execute(count_query)
-        total_count = cursor.fetchone()[0]
+        count_result = cursor.fetchone()
+        total_count = count_result[0] if count_result else 0
         
         # Count today's announcements
         today_query = count_query + " AND DATE(created_at) = CURRENT_DATE"
         cursor.execute(today_query)
-        today_count = cursor.fetchone()[0]
+        today_result = cursor.fetchone()
+        today_count = today_result[0] if today_result else 0
         
         # Summary message EXACTLY like in image: "🚚 Найдено 4883 объявлений, 728 из них сегодня"
         summary_text = f"🚚 Найдено {total_count} объявлений, {today_count} из них сегодня"
@@ -1001,7 +1011,8 @@ async def show_more_results(callback: CallbackQuery):
                 ]
             )
             
-            await callback.message.answer(text, reply_markup=keyboard)
+            if callback.message:
+                await callback.message.answer(text, reply_markup=keyboard, parse_mode="HTML")
         
         # Show next pagination button if more results available
         next_offset = offset + 5
@@ -1010,7 +1021,8 @@ async def show_more_results(callback: CallbackQuery):
             count_query += " AND " + " AND ".join(conditions)
         
         cursor.execute(count_query)
-        total_count = cursor.fetchone()[0]
+        count_result = cursor.fetchone()
+        total_count = count_result[0] if count_result else 0
         
         if next_offset < total_count:
             next_keyboard = InlineKeyboardMarkup(
@@ -1018,7 +1030,8 @@ async def show_more_results(callback: CallbackQuery):
                     [InlineKeyboardButton(text=f"{next_offset} из {total_count} показать больше", callback_data=f"more:{vehicle_filter}:{from_city or ''}:{to_city or ''}:{next_offset}")]
                 ]
             )
-            await callback.message.answer(f"🔍 Показано {next_offset} из {total_count}", reply_markup=next_keyboard)
+            if callback.message:
+                await callback.message.answer(f"🔍 Показано {next_offset} из {total_count}", reply_markup=next_keyboard)
         
         cursor.close()
         conn.close()
