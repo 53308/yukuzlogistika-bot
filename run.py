@@ -17,7 +17,11 @@ from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.types import BotCommand
 
 # Import configuration and models
-from app.config import BOT_TOKEN, BOT_COMMANDS
+import os
+from app.config import BOT_COMMANDS
+
+# Get BOT_TOKEN directly from environment
+BOT_TOKEN = os.getenv('BOT_TOKEN')
 from app.models import init_db
 
 # Import routers
@@ -61,6 +65,7 @@ async def main():
     
     if not BOT_TOKEN:
         logger.error("❌ BOT_TOKEN not found!")
+        logger.error(f"Current BOT_TOKEN value: {BOT_TOKEN}")
         return
     
     # Initialize database
