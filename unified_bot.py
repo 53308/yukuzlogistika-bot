@@ -8,6 +8,10 @@ import asyncio
 import logging
 import os
 import psycopg2
+import fcntl
+import sys
+import time
+from typing import Optional
 from datetime import datetime, timedelta
 from typing import Dict, List, Tuple, Optional
 from aiohttp import web
@@ -33,15 +37,15 @@ import fcntl
 LOCK_FILE = '/tmp/yukuz_bot.lock'
 
 def acquire_lock():
-    """Prevent multiple bot instances"""
+    """Enhanced instance locking"""
     try:
         lock_fd = open(LOCK_FILE, 'w')
         fcntl.flock(lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
         lock_fd.write(str(os.getpid()))
         lock_fd.flush()
         return lock_fd
-    except IOError:
-        print("❌ Another bot instance is already running! Exiting...")
+    except (IOError, BlockingIOError) as e:
+        logger.error(f"❌ Another instance running (PID: {os.getpid()}). Error: {e}")
         sys.exit(1)
 
 # Configure logging
@@ -54,6 +58,9 @@ logging.basicConfig(
     ]
 )
 logger = logging.getLogger(__name__)
+
+# Глобальные настройки блокировки
+LOCK_FILE = '/tmp/yukuz_bot.lock'
 
 # Bot configuration
 BOT_TOKEN = os.getenv('BOT_TOKEN')
@@ -895,18 +902,27 @@ async def main():
     
     # Check if we're in conflict environment
     conflict_detected = False
-    try:
-        # Quick test to see if we can get updates
-        logger.info("🔄 Deleting webhook and testing connection...")
-        await bot.get_me()
-        # Delete webhook to prevent conflicts
+        max_retries = 3
+    for attempt in range(max_retries):
         try:
+            logger.info(f"🔄 Attempt {attempt+1}/{max_retries}: Starting bot...")
             await bot.delete_webhook(drop_pending_updates=True)
-            logger.info("✅ Webhook deleted successfully")
-        except Exception as webhook_error:
-            logger.warning(f"⚠️ Webhook deletion warning: {webhook_error}")
-        logger.info("✅ Telegram connection successful - starting polling")
-        await dp.start_polling(bot, skip_updates=True, handle_signals=False)
+            await asyncio.sleep(2)
+            await dp.start_polling(
+                bot,
+                skip_updates=True,
+                handle_signals=False,
+                allowed_updates=[]
+            )
+            break
+        except TelegramConflictError as e:
+            if attempt < max_retries - 1:
+                wait_time = 5 * (attempt + 1)
+                logger.warning(f"⚠️ Conflict detected. Retrying in {wait_time} sec...")
+                await asyncio.sleep(wait_time)
+            else:
+                logger.error("❌ Max retries reached. Shutting down.")
+                return
     except TelegramConflictError:
         conflict_detected = True
         logger.warning("⚠️ TelegramConflictError detected")
@@ -927,17 +943,20 @@ async def main():
         logger.error(f"❌ Bot startup error: {e}")
         logger.info("💡 Keeping health server running for 5 minutes")
         await asyncio.sleep(300)
-    finally:
-        # Cleanup
-        logger.info("🧹 Starting cleanup process...")
+        finally:
+        logger.info("🧹 Cleaning up...")
         try:
-            if not conflict_detected:
-                await dp.stop_polling()
-            await health_runner.cleanup()
+            await dp.storage.close()
             await bot.session.close()
-            logger.info("✅ All resources cleaned up successfully")
-        except Exception as cleanup_error:
-            logger.warning(f"⚠️ Cleanup warning: {cleanup_error}")
+            if lock_fd:
+                lock_fd.close()
+                try:
+                    os.unlink(LOCK_FILE)
+                except:
+                    pass
+            logger.info("✅ Resources released")
+        except Exception as e:
+            logger.error(f"⚠️ Cleanup failed: {e}")
 
 if __name__ == "__main__":
     try:
