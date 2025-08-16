@@ -26,6 +26,24 @@ from aiogram.exceptions import TelegramBadRequest, TelegramConflictError
 import signal
 import sys
 
+
+import fcntl
+
+# CONFLICT PREVENTION - Lock file system
+LOCK_FILE = '/tmp/yukuz_bot.lock'
+
+def acquire_lock():
+    """Prevent multiple bot instances"""
+    try:
+        lock_fd = open(LOCK_FILE, 'w')
+        fcntl.flock(lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        lock_fd.write(str(os.getpid()))
+        lock_fd.flush()
+        return lock_fd
+    except IOError:
+        print("❌ Another bot instance is already running! Exiting...")
+        sys.exit(1)
+
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
@@ -793,7 +811,9 @@ async def create_health_server():
 
 async def main():
     """Main function"""
-    logger.info("🚀 Starting YukUz Logistics Bot - Unified Version")
+    # ACQUIRE LOCK to prevent multiple instances
+    lock_fd = acquire_lock()
+    logger.info("🚀 Starting YukUz Logistics Bot - Unified Version (CONFLICT-FREE)")
     
     if not BOT_TOKEN:
         logger.error("❌ BOT_TOKEN not found! Set it in environment variables.")
