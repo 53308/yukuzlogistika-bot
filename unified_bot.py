@@ -904,47 +904,47 @@ async def main():
     max_retries = 3
     conflict_detected = False
     
-    for attempt in range(max_retries):
-        try:
-            logger.info(f"🔄 Attempt {attempt+1}/{max_retries}: Starting bot...")
-            await bot.delete_webhook(drop_pending_updates=True)
-            await asyncio.sleep(2)
-            await dp.start_polling(
-                bot,
-                skip_updates=True,
-                handle_signals=False,
-                allowed_updates=[]
-            )
-            break
-        except TelegramConflictError as e:
-            conflict_detected = True
-            if attempt < max_retries - 1:
-                wait_time = 5 * (attempt + 1)
-                logger.warning(f"⚠️ Conflict detected. Retrying in {wait_time} sec...")
-                await asyncio.sleep(wait_time)
-            else:
-                logger.error("❌ Max retries reached. Shutting down.")
+    try:
+        for attempt in range(max_retries):
+            try:
+                logger.info(f"🔄 Attempt {attempt+1}/{max_retries}: Starting bot...")
+                await bot.delete_webhook(drop_pending_updates=True)
+                await asyncio.sleep(2)
+                await dp.start_polling(
+                    bot,
+                    skip_updates=True,
+                    handle_signals=False,
+                    allowed_updates=[]
+                )
+                break
+            except TelegramConflictError as e:
+                conflict_detected = True
+                if attempt < max_retries - 1:
+                    wait_time = 5 * (attempt + 1)
+                    logger.warning(f"⚠️ Conflict detected. Retrying in {wait_time} sec...")
+                    await asyncio.sleep(wait_time)
+                else:
+                    logger.error("❌ Max retries reached. Shutting down.")
+                    return
+            except Exception as e:
+                logger.error(f"❌ Bot startup error: {e}")
+                logger.info("💡 Keeping health server running for 5 minutes")
+                await asyncio.sleep(300)
                 return
-        except Exception as e:
-            logger.error(f"❌ Bot startup error: {e}")
-            logger.info("💡 Keeping health server running for 5 minutes")
-            await asyncio.sleep(300)
-            return
 
-    if conflict_detected:
-        logger.warning("⚠️ TelegramConflictError detected")
-        logger.info("✅ This is NORMAL during development - another instance is running")
-        logger.info("🚀 On Render: Only ONE instance runs = NO conflicts")
-        logger.info("💡 Health server continues for deployment verification")
-        
-        try:
-            logger.info("🔄 Entering maintenance mode - Health server active")
-            for i in range(240):  # 4 hours with 1-minute intervals
-                await asyncio.sleep(60)
-                if i % 15 == 0:  # Log every 15 minutes
-                    logger.info(f"🟢 Ready for deployment - Health OK ({i}min uptime)")
-        except KeyboardInterrupt:
-            logger.info("👋 Graceful shutdown via interrupt")
+        if conflict_detected:
+            logger.warning("⚠️ TelegramConflictError detected")
+            logger.info("✅ This is NORMAL during development - another instance is running")
+            logger.info("🚀 On Render: Only ONE instance runs = NO conflicts")
+            
+            try:
+                logger.info("🔄 Entering maintenance mode - Health server active")
+                for i in range(240):
+                    await asyncio.sleep(60)
+                    if i % 15 == 0:
+                        logger.info(f"🟢 Ready for deployment - Health OK ({i}min uptime)")
+            except KeyboardInterrupt:
+                logger.info("👋 Graceful shutdown via interrupt")
 
     finally:
         logger.info("🧹 Cleaning up...")
@@ -964,8 +964,6 @@ async def main():
 if __name__ == "__main__":
     try:
         logger.info("🚀 YukUz Logistics Bot - Production Ready")
-        logger.info("📊 Environment: Development (conflict handling active)")
-        logger.info("🔧 For production deployment: Use Render with this exact code")
         asyncio.run(main())
     except KeyboardInterrupt:
         logger.info("👋 Bot gracefully stopped by user")
