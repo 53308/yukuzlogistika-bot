@@ -900,9 +900,10 @@ async def main():
     logger.info("✅ YukUz Logistics Bot READY!")
     logger.info("📱 Features: Exact copy with unified architecture")
     
-    # Check if we're in conflict environment
+        # Conflict-resistant polling
+    max_retries = 3
     conflict_detected = False
-        max_retries = 3
+    
     for attempt in range(max_retries):
         try:
             logger.info(f"🔄 Attempt {attempt+1}/{max_retries}: Starting bot...")
@@ -916,6 +917,7 @@ async def main():
             )
             break
         except TelegramConflictError as e:
+            conflict_detected = True
             if attempt < max_retries - 1:
                 wait_time = 5 * (attempt + 1)
                 logger.warning(f"⚠️ Conflict detected. Retrying in {wait_time} sec...")
@@ -923,14 +925,18 @@ async def main():
             else:
                 logger.error("❌ Max retries reached. Shutting down.")
                 return
-    except TelegramConflictError:
-        conflict_detected = True
+        except Exception as e:
+            logger.error(f"❌ Bot startup error: {e}")
+            logger.info("💡 Keeping health server running for 5 minutes")
+            await asyncio.sleep(300)
+            return
+
+    if conflict_detected:
         logger.warning("⚠️ TelegramConflictError detected")
         logger.info("✅ This is NORMAL during development - another instance is running")
         logger.info("🚀 On Render: Only ONE instance runs = NO conflicts")
         logger.info("💡 Health server continues for deployment verification")
         
-        # Keep running with periodic status updates
         try:
             logger.info("🔄 Entering maintenance mode - Health server active")
             for i in range(240):  # 4 hours with 1-minute intervals
@@ -939,11 +945,8 @@ async def main():
                     logger.info(f"🟢 Ready for deployment - Health OK ({i}min uptime)")
         except KeyboardInterrupt:
             logger.info("👋 Graceful shutdown via interrupt")
-    except Exception as e:
-        logger.error(f"❌ Bot startup error: {e}")
-        logger.info("💡 Keeping health server running for 5 minutes")
-        await asyncio.sleep(300)
-        finally:
+
+    finally:
         logger.info("🧹 Cleaning up...")
         try:
             await dp.storage.close()
