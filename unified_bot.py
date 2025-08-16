@@ -817,8 +817,7 @@ async def create_health_server():
     return runner
 
 async def main():
-    """Main function"""
-    # ACQUIRE LOCK to prevent multiple instances
+    """Main function with enhanced conflict handling"""
     lock_fd = acquire_lock()
     logger.info("🚀 Starting YukUz Logistics Bot - Unified Version (CONFLICT-FREE)")
     
@@ -832,122 +831,87 @@ async def main():
     
     logger.info(f"📊 Database URL configured: {DATABASE_URL[:50]}...")
     
-    # Initialize database
     if not init_db():
         logger.error("❌ Failed to initialize database!")
         return
     
     logger.info("✅ Database initialized")
     
-    # Insert sample data
     try:
         conn = get_db_connection()
-        if not conn:
-            logger.error("❌ Cannot insert sample data - no database connection")
-            return
-        cursor = conn.cursor()
-        
-        # Clear existing data and insert samples
-        cursor.execute("DELETE FROM announcements")
-        
-        sample_data = [
-            ('📦 Ангрен → Грозный (22т)', 'Срочная перевозка гранита. Нужен тент 2шт. Хорошая цена, быстрая доставка.', 'cargo', 'published', 'Ангрен', 'Грозный', '22т', 'гранит', 'Тент 2шт', 'Азиз Норматов', '+998933456789', 456789123, 0, 0, datetime.now() - timedelta(minutes=3), datetime.now(), None, 'https://t.me/user?id=456789123', 'manual', None),
+        if conn:
+            cursor = conn.cursor()
+            cursor.execute("DELETE FROM announcements")
             
-            ('📦 Ташкент → Наманган (19т)', 'Реф, тент, пепси. Качественная перевозка напитков.', 'cargo', 'published', 'Toshkent', 'Namangan', '19т', 'пепси', 'Реф, Тент', 'Умид Каримов', '+998944567890', 789123456, 0, 0, datetime.now() - timedelta(minutes=7), datetime.now(), None, 'https://t.me/user?id=789123456', 'manual', None),
+            sample_data = [
+                ('📦 Ангрен → Грозный (22т)', 'Срочная перевозка гранита. Нужен тент 2шт. Хорошая цена, быстрая доставка.', 'cargo', 'published', 'Ангрен', 'Грозный', '22т', 'гранит', 'Тент 2шт', 'Азиз Норматов', '+998933456789', 456789123, 0, 0, datetime.now() - timedelta(minutes=3), datetime.now(), None, 'https://t.me/user?id=456789123', 'manual', None),
+                ('📦 Ташкент → Наманган (19т)', 'Реф, тент, пепси. Качественная перевозка напитков.', 'cargo', 'published', 'Toshkent', 'Namangan', '19т', 'пепси', 'Реф, Тент', 'Умид Каримов', '+998944567890', 789123456, 0, 0, datetime.now() - timedelta(minutes=7), datetime.now(), None, 'https://t.me/user?id=789123456', 'manual', None),
+                ('📦 Хорзига → Наманган (19-22т)', 'Юк пепси. Срочная доставка напитков.', 'cargo', 'published', 'Xiva', 'Namangan', '19-22 тоннагача', 'Юк Пепси', 'РЕФ тент фура керак', 'Хозирга', '+998912345678', 987654321, 0, 0, datetime.now() - timedelta(minutes=12), datetime.now(), None, 'https://t.me/user?id=987654321', 'external', '@logistics_channel'),
+                ('🚛 Самарканд → Москва (25т)', 'Регулярные рейсы, надежная доставка в Россию', 'transport', 'published', 'Samarqand', 'Moskva', '25т', '', 'Kamaz', 'Карим Абдуллаев', '+998901234567', 123456789, 0, 0, datetime.now() - timedelta(minutes=15), datetime.now(), None, 'https://t.me/user?id=123456789', 'manual', None),
+                ('📦 Алмата → Ташкент (15т)', 'Текстильные изделия, осторожная перевозка', 'cargo', 'published', 'Almaty', 'Toshkent', '15т', 'текстиль', 'Мега', 'Дилшода Каримова', '+998955678901', 321654987, 0, 0, datetime.now() - timedelta(hours=1), datetime.now(), None, 'https://t.me/user?id=321654987', 'external', '@cargo_uz')
+            ]
             
-            ('📦 Хорзига → Наманган (19-22т)', 'Юк пепси. Срочная доставка напитков.', 'cargo', 'published', 'Xiva', 'Namangan', '19-22 тоннагача', 'Юк Пепси', 'РЕФ тент фура керак', 'Хозирга', '+998912345678', 987654321, 0, 0, datetime.now() - timedelta(minutes=12), datetime.now(), None, 'https://t.me/user?id=987654321', 'external', '@logistics_channel'),
+            for data in sample_data:
+                cursor.execute("""
+                    INSERT INTO announcements 
+                    (title, description, announcement_type, status, from_location, to_location, 
+                     cargo_weight, cargo_type, vehicle_type, contact_name, contact_phone, 
+                     user_telegram_id, views_count, contacts_accessed, created_at, updated_at, expires_at, message_url, source, telegram_username)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                """, data)
             
-            ('🚛 Самарканд → Москва (25т)', 'Регулярные рейсы, надежная доставка в Россию', 'transport', 'published', 'Samarqand', 'Moskva', '25т', '', 'Kamaz', 'Карим Абдуллаев', '+998901234567', 123456789, 0, 0, datetime.now() - timedelta(minutes=15), datetime.now(), None, 'https://t.me/user?id=123456789', 'manual', None),
+            conn.commit()
+            cursor.close()
+            conn.close()
+            logger.info("✅ Sample data inserted")
             
-            ('📦 Алмата → Ташкент (15т)', 'Текстильные изделия, осторожная перевозка', 'cargo', 'published', 'Almaty', 'Toshkent', '15т', 'текстиль', 'Мега', 'Дилшода Каримова', '+998955678901', 321654987, 0, 0, datetime.now() - timedelta(hours=1), datetime.now(), None, 'https://t.me/user?id=321654987', 'external', '@cargo_uz')
-        ]
-        
-        for data in sample_data:
-            cursor.execute("""
-                INSERT INTO announcements 
-                (title, description, announcement_type, status, from_location, to_location, 
-                 cargo_weight, cargo_type, vehicle_type, contact_name, contact_phone, 
-                 user_telegram_id, views_count, contacts_accessed, created_at, updated_at, expires_at, message_url, source, telegram_username)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-            """, data)
-        
-        conn.commit()
-        cursor.close()
-        conn.close()
-        
-        logger.info("✅ Sample data inserted")
-        
     except Exception as e:
         logger.error(f"❌ Error inserting sample data: {e}")
-    
-    # Create bot with modified settings for conflict handling
+
     bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
     dp = Dispatcher(storage=MemoryStorage())
-    
-    # Include router
     dp.include_router(router)
-    
-    # Set commands
+
     try:
         commands = [BotCommand(command=cmd["command"], description=cmd["description"]) for cmd in BOT_COMMANDS]
         await bot.set_my_commands(commands)
     except TelegramConflictError:
         logger.warning("Command setup conflict - will work on production")
-    
-    # Start health server
-    health_runner = await create_health_server()
-    
-    logger.info("✅ YukUz Logistics Bot READY!")
-    logger.info("📱 Features: Exact copy with unified architecture")
-    
-        # Conflict-resistant polling
-    max_retries = 3
-    conflict_detected = False
-    
-    try:
-        for attempt in range(max_retries):
-            try:
-                logger.info(f"🔄 Attempt {attempt+1}/{max_retries}: Starting bot...")
-                await bot.delete_webhook(drop_pending_updates=True)
-                await asyncio.sleep(2)
-                await dp.start_polling(
-                    bot,
-                    skip_updates=True,
-                    handle_signals=False,
-                    allowed_updates=[]
-                )
-                break
-            except TelegramConflictError as e:
-                conflict_detected = True
-                if attempt < max_retries - 1:
-                    wait_time = 5 * (attempt + 1)
-                    logger.warning(f"⚠️ Conflict detected. Retrying in {wait_time} sec...")
-                    await asyncio.sleep(wait_time)
-                else:
-                    logger.error("❌ Max retries reached. Shutting down.")
-                    return
-            except Exception as e:
-                logger.error(f"❌ Bot startup error: {e}")
-                logger.info("💡 Keeping health server running for 5 minutes")
-                await asyncio.sleep(300)
-                return
 
-        if conflict_detected:
-            logger.warning("⚠️ TelegramConflictError detected")
-            logger.info("✅ This is NORMAL during development - another instance is running")
-            logger.info("🚀 On Render: Only ONE instance runs = NO conflicts")
+    health_runner = await create_health_server()
+    logger.info("✅ YukUz Logistics Bot READY!")
+
+    # Enhanced polling with conflict resolution
+    max_attempts = 5
+    for attempt in range(max_attempts):
+        try:
+            logger.info(f"🔄 Connection attempt {attempt + 1}/{max_attempts}")
+            await bot.delete_webhook(drop_pending_updates=True)
+            await asyncio.sleep(2)
             
-            try:
-                logger.info("🔄 Entering maintenance mode - Health server active")
-                for i in range(240):
-                    await asyncio.sleep(60)
-                    if i % 15 == 0:
-                        logger.info(f"🟢 Ready for deployment - Health OK ({i}min uptime)")
-            except KeyboardInterrupt:
-                logger.info("👋 Graceful shutdown via interrupt")
+            await dp.start_polling(
+                bot,
+                skip_updates=True,
+                handle_signals=False,
+                allowed_updates=[],
+                close_bot_session=False
+            )
+            break
+        except TelegramConflictError as e:
+            logger.error(f"⚠️ Conflict detected: {e}")
+            if attempt < max_attempts - 1:
+                wait_time = (attempt + 1) * 10
+                logger.info(f"⏳ Waiting {wait_time} seconds...")
+                await asyncio.sleep(wait_time)
+            else:
+                logger.error("❌ Max attempts reached. Shutting down.")
+                return
+        except Exception as e:
+            logger.error(f"❌ Unexpected error: {e}")
+            return
 
     finally:
-        logger.info("🧹 Cleaning up...")
+        logger.info("🧹 Cleaning up resources...")
         try:
             await dp.storage.close()
             await bot.session.close()
@@ -957,9 +921,8 @@ async def main():
                     os.unlink(LOCK_FILE)
                 except:
                     pass
-            logger.info("✅ Resources released")
         except Exception as e:
-            logger.error(f"⚠️ Cleanup failed: {e}")
+            logger.error(f"⚠️ Cleanup error: {e}")
 
 if __name__ == "__main__":
     try:
