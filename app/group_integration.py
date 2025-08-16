@@ -140,8 +140,8 @@ class LogisticsGroupIntegrator:
                         INSERT INTO announcements (
                             title, description, announcement_type, status, from_location, to_location,
                             cargo_type, vehicle_type, contact_name, contact_phone, telegram_username,
-                            source, created_at, updated_at
-                        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                            source, created_at, updated_at, user_telegram_id, user_name
+                        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     """, (
                         f"{order['from_location']} - {order['to_location']} ({order['cargo_type']})",
                         order['description'],
@@ -153,10 +153,12 @@ class LogisticsGroupIntegrator:
                         order['vehicle_type'],
                         order['contact_name'],
                         order['contact_phone'],
-                        order['telegram_username'],
+                        order.get('telegram_username', ''),
                         f"External Group {order['source_group']}",
                         order['created_at'],
-                        order['created_at']
+                        order['created_at'],
+                        order.get('user_telegram_id', ''),
+                        order.get('user_name', order['contact_name'])
                     ))
                     
             conn.commit()
