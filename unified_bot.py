@@ -892,18 +892,49 @@ async def insert_sample_data():
             cursor.execute("DELETE FROM announcements")
             
             sample_data = [
-                ('📦 Ангрен → Грозный (22т)', ...),
-                ... # другие данные
+                ('📦 Ангрен → Грозный (22т)', 'Срочная перевозка гранита. Нужен тент 2шт. Хорошая цена, быстрая доставка.', 
+                 'cargo', 'published', 'Ангрен', 'Грозный', '22т', 'гранит', 'Тент 2шт', 
+                 'Азиз Норматов', '+998933456789', 456789123, 0, 0, 
+                 datetime.now() - timedelta(minutes=3), datetime.now(), None, 
+                 'https://t.me/user?id=456789123', 'manual', None),
+                
+                ('📦 Ташкент → Наманган (19т)', 'Реф, тент, пепси. Качественная перевозка напитков.', 
+                 'cargo', 'published', 'Toshkent', 'Namangan', '19т', 'пепси', 'Реф, Тент', 
+                 'Умид Каримов', '+998944567890', 789123456, 0, 0, 
+                 datetime.now() - timedelta(minutes=7), datetime.now(), None, 
+                 'https://t.me/user?id=789123456', 'manual', None),
+                
+                ('📦 Хорзига → Наманган (19-22т)', 'Юк пепси. Срочная доставка напитков.', 
+                 'cargo', 'published', 'Xiva', 'Namangan', '19-22 тоннагача', 'Юк Пепси', 'РЕФ тент фура керак', 
+                 'Хозирга', '+998912345678', 987654321, 0, 0, 
+                 datetime.now() - timedelta(minutes=12), datetime.now(), None, 
+                 'https://t.me/user?id=987654321', 'external', '@logistics_channel'),
+                
+                ('🚛 Самарканд → Москва (25т)', 'Регулярные рейсы, надежная доставка в Россию', 
+                 'transport', 'published', 'Samarqand', 'Moskva', '25т', '', 'Kamaz', 
+                 'Карим Абдуллаев', '+998901234567', 123456789, 0, 0, 
+                 datetime.now() - timedelta(minutes=15), datetime.now(), None, 
+                 'https://t.me/user?id=123456789', 'manual', None),
+                
+                ('📦 Алмата → Ташкент (15т)', 'Текстильные изделия, осторожная перевозка', 
+                 'cargo', 'published', 'Almaty', 'Toshkent', '15т', 'текстиль', 'Мега', 
+                 'Дилшода Каримова', '+998955678901', 321654987, 0, 0, 
+                 datetime.now() - timedelta(hours=1), datetime.now(), None, 
+                 'https://t.me/user?id=321654987', 'external', '@cargo_uz')
             ]
             
             for data in sample_data:
                 cursor.execute("""
-                    INSERT INTO announcements (...) 
-                    VALUES (%s, %s, ...)
+                    INSERT INTO announcements 
+                    (title, description, announcement_type, status, from_location, to_location, 
+                     cargo_weight, cargo_type, vehicle_type, contact_name, contact_phone, 
+                     user_telegram_id, views_count, contacts_accessed, created_at, updated_at, expires_at, 
+                     message_url, source, telegram_username)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 """, data)
                 
             conn.commit()
-        logger.info("✅ Sample data loaded")
+        logger.info("✅ Sample data loaded successfully")
     except Exception as e:
         logger.error(f"❌ Error loading sample data: {e}")
         raise
