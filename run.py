@@ -18,10 +18,18 @@ from aiogram.types import BotCommand
 
 # Import configuration and models
 import os
-from app.config import BOT_COMMANDS
 
 # Get BOT_TOKEN directly from environment
 BOT_TOKEN = os.getenv('BOT_TOKEN')
+
+# Bot commands
+BOT_COMMANDS = [
+    {"command": "start", "description": "🏠 Главное меню"},
+    {"command": "cargo", "description": "📦 Найти груз"},
+    {"command": "transport", "description": "🚛 Найти транспорт"},
+    {"command": "search", "description": "🔍 Поиск"},
+    {"command": "help", "description": "ℹ️ Помощь"}
+]
 from app.models import init_db
 
 # Import routers
