@@ -7,10 +7,7 @@ All functionality in one file for easy deployment
 import asyncio
 import logging
 import os
-import threading
-import time
 import psycopg2
-import re
 from datetime import datetime, timedelta
 from typing import Dict, List, Tuple, Optional
 from aiohttp import web
@@ -22,8 +19,10 @@ from aiogram.fsm.state import State, StatesGroup
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.types import (
     Message, CallbackQuery, BotCommand, InlineKeyboardMarkup, 
-    InlineKeyboardButton, ReplyKeyboardMarkup, KeyboardButton
+    InlineKeyboardButton, ReplyKeyboardMarkup, KeyboardButton,
+    InaccessibleMessage
 )
+from aiogram.exceptions import TelegramBadRequest
 
 # Configure logging
 logging.basicConfig(
@@ -328,9 +327,9 @@ async def start_handler(message: Message):
                 first_name = EXCLUDED.first_name,
                 last_name = EXCLUDED.last_name,
                 updated_at = CURRENT_TIMESTAMP
-        """, (user_id, getattr(message.from_user, 'username', None), 
-              getattr(message.from_user, 'first_name', None), 
-              getattr(message.from_user, 'last_name', None)))
+        """, (user_id, message.from_user.username if message.from_user.username else None, 
+              message.from_user.first_name if message.from_user.first_name else None, 
+              message.from_user.last_name if message.from_user.last_name else None))
         conn.commit()
         cursor.close()
         conn.close()
@@ -374,8 +373,12 @@ async def search_type_callback(callback: CallbackQuery, state: FSMContext):
         text = "🚛 <b>Поиск транспорта</b>\n\nВыберите страну отправления:"
     
     countries = get_country_selection()
-    if callback.message and hasattr(callback.message, 'edit_text') and callback.message.edit_text:
-        await callback.message.edit_text(text, reply_markup=countries, parse_mode="HTML")
+    try:
+        if callback.message and not isinstance(callback.message, InaccessibleMessage):
+            await callback.message.edit_text(text, reply_markup=countries, parse_mode="HTML")
+    except (TelegramBadRequest, AttributeError):
+        if callback.message and not isinstance(callback.message, InaccessibleMessage):
+            await callback.message.answer(text, reply_markup=countries, parse_mode="HTML")
     await callback.answer()
 
 @router.callback_query(F.data.startswith("country_"))
@@ -390,12 +393,20 @@ async def country_selection_callback(callback: CallbackQuery, state: FSMContext)
     if country in CITY_DATABASE:
         text = f"Выберите город в стране {country.title()}:"
         cities = get_city_buttons(country)
-        if callback.message and hasattr(callback.message, 'edit_text') and callback.message.edit_text:
-            await callback.message.edit_text(text, reply_markup=cities)
+        try:
+            if callback.message and not isinstance(callback.message, InaccessibleMessage):
+                await callback.message.edit_text(text, reply_markup=cities)
+        except (TelegramBadRequest, AttributeError):
+            if callback.message and not isinstance(callback.message, InaccessibleMessage):
+                await callback.message.answer(text, reply_markup=cities)
     else:
         # For countries not in database, show generic message
-        if callback.message and hasattr(callback.message, 'edit_text') and callback.message.edit_text:
-            await callback.message.edit_text(f"Поиск в стране {country.title()} временно недоступен.")
+        try:
+            if callback.message and not isinstance(callback.message, InaccessibleMessage):
+                await callback.message.edit_text(f"Поиск в стране {country.title()} временно недоступен.")
+        except (TelegramBadRequest, AttributeError):
+            if callback.message and not isinstance(callback.message, InaccessibleMessage):
+                await callback.message.answer(f"Поиск в стране {country.title()} временно недоступен.")
     
     await callback.answer()
 
@@ -435,14 +446,22 @@ async def city_selection_callback(callback: CallbackQuery, state: FSMContext):
         conn.close()
         
         if not results:
-            if callback.message and hasattr(callback.message, 'edit_text') and callback.message.edit_text:
-                await callback.message.edit_text(f"❌ По запросу '{city_name}' ничего не найдено.")
+            try:
+                if callback.message and not isinstance(callback.message, InaccessibleMessage):
+                    await callback.message.edit_text(f"❌ По запросу '{city_name}' ничего не найдено.")
+            except (TelegramBadRequest, AttributeError):
+                if callback.message and not isinstance(callback.message, InaccessibleMessage):
+                    await callback.message.answer(f"❌ По запросу '{city_name}' ничего не найдено.")
             return
 
         # Send results as individual messages exactly like original
         search_icon = "📦" if search_type == "cargo" else "🚚"
-        if callback.message and hasattr(callback.message, 'edit_text') and callback.message.edit_text:
-            await callback.message.edit_text(f"🔍 Результаты поиска {search_icon} в {city_name}:")
+        try:
+            if callback.message and not isinstance(callback.message, InaccessibleMessage):
+                await callback.message.edit_text(f"🔍 Результаты поиска {search_icon} в {city_name}:")
+        except (TelegramBadRequest, AttributeError):
+            if callback.message and not isinstance(callback.message, InaccessibleMessage):
+                await callback.message.answer(f"🔍 Результаты поиска {search_icon} в {city_name}:")
         
         for i, row in enumerate(results[:5], 1):
             (announcement_id, title, description, ann_type, status, from_loc, to_loc, 
@@ -553,8 +572,12 @@ async def show_detail_callback(callback: CallbackQuery):
             [InlineKeyboardButton(text="🔙 Назад к поиску", callback_data="back_search")]
         ])
         
-        if callback.message and hasattr(callback.message, 'edit_text') and callback.message.edit_text:
-            await callback.message.edit_text(text, reply_markup=keyboard, parse_mode="HTML")
+        try:
+            if callback.message and not isinstance(callback.message, InaccessibleMessage):
+                await callback.message.edit_text(text, reply_markup=keyboard, parse_mode="HTML")
+        except (TelegramBadRequest, AttributeError):
+            if callback.message and not isinstance(callback.message, InaccessibleMessage):
+                await callback.message.answer(text, reply_markup=keyboard, parse_mode="HTML")
         
         cursor.close()
         conn.close()
@@ -601,8 +624,12 @@ async def show_contact_callback(callback: CallbackQuery):
                 [InlineKeyboardButton(text="🔙 Назад", callback_data="back_search")]
             ])
             
-            if callback.message and hasattr(callback.message, 'edit_text') and callback.message.edit_text:
-                await callback.message.edit_text(sub_text, reply_markup=sub_keyboard, parse_mode="HTML")
+            try:
+                if callback.message and not isinstance(callback.message, InaccessibleMessage):
+                    await callback.message.edit_text(sub_text, reply_markup=sub_keyboard, parse_mode="HTML")
+            except (TelegramBadRequest, AttributeError):
+                if callback.message and not isinstance(callback.message, InaccessibleMessage):
+                    await callback.message.answer(sub_text, reply_markup=sub_keyboard, parse_mode="HTML")
             return
         
         # Get announcement
@@ -637,8 +664,12 @@ async def show_contact_callback(callback: CallbackQuery):
             [InlineKeyboardButton(text="🔙 Назад к объявлению", callback_data=f"detail_{announcement_id}")]
         ])
         
-        if callback.message and hasattr(callback.message, 'edit_text') and callback.message.edit_text:
-            await callback.message.edit_text(contact_text, reply_markup=back_keyboard, parse_mode="HTML")
+        try:
+            if callback.message and not isinstance(callback.message, InaccessibleMessage):
+                await callback.message.edit_text(contact_text, reply_markup=back_keyboard, parse_mode="HTML")
+        except (TelegramBadRequest, AttributeError):
+            if callback.message and not isinstance(callback.message, InaccessibleMessage):
+                await callback.message.answer(contact_text, reply_markup=back_keyboard, parse_mode="HTML")
         
         cursor.close()
         conn.close()
