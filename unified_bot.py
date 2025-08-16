@@ -897,8 +897,14 @@ async def main():
     conflict_detected = False
     try:
         # Quick test to see if we can get updates
-        logger.info("🔄 Testing Telegram connection...")
+        logger.info("🔄 Deleting webhook and testing connection...")
         await bot.get_me()
+        # Delete webhook to prevent conflicts
+        try:
+            await bot.delete_webhook(drop_pending_updates=True)
+            logger.info("✅ Webhook deleted successfully")
+        except Exception as webhook_error:
+            logger.warning(f"⚠️ Webhook deletion warning: {webhook_error}")
         logger.info("✅ Telegram connection successful - starting polling")
         await dp.start_polling(bot, skip_updates=True, handle_signals=False)
     except TelegramConflictError:
