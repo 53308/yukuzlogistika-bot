@@ -909,20 +909,19 @@ async def main():
         except Exception as e:
             logger.error(f"❌ Unexpected error: {e}")
             return
-
-    finally:
-        logger.info("🧹 Cleaning up resources...")
-        try:
-            await dp.storage.close()
-            await bot.session.close()
-            if lock_fd:
-                lock_fd.close()
-                try:
-                    os.unlink(LOCK_FILE)
-                except:
-                    pass
-        except Exception as e:
-            logger.error(f"⚠️ Cleanup error: {e}")
+        finally:
+            logger.info("🧹 Cleaning up resources...")
+            try:
+                await dp.storage.close()
+                await bot.session.close()
+                if lock_fd:
+                    lock_fd.close()
+                    try:
+                        os.unlink(LOCK_FILE)
+                    except:
+                        pass
+            except Exception as e:
+                logger.error(f"⚠️ Cleanup error: {e}")
 
 if __name__ == "__main__":
     try:
